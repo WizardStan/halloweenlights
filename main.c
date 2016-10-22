@@ -11,20 +11,26 @@
 
 #pragma config LVP = OFF
 
-#define LED_LAT LATCbits.LATC0
-#define LED_TRIS TRISCbits.TRISC0
+#define LED_LAT LATD
+#define LED_TRIS TRISD
 
-uint16_t randDelay = 20000;
+#define NUM_LEDS (8)
+#define LED_DIV (3)
+#define STARE_DELAY (15000 / NUM_LEDS)
+#define BLINK_DELAY (180 / NUM_LEDS)
+
+uint16_t randDelay = STARE_DELAY;
 uint16_t getDelay() {
 	randDelay ^= randDelay >> 3;
 	randDelay ^= randDelay << 6;
 	randDelay ^= randDelay >> 7;
-	randDelay >>= 1;
-	randDelay += 20000;
+	// TODO: how to divide by NUM_LEDS efficiently?
+	randDelay >>= (2 + LED_DIV);
+	randDelay += STARE_DELAY;
 	return randDelay;
 }
 
-// concept: Long period LED on, rapid succession off-on-on, then back to start
+// concept: Long period LED on, rapid succession off-on-off, then back to start
 // How long is the period?  Pseudo random, between 10 and 20 seconds
 typedef enum {
 	STARE,
@@ -33,30 +39,40 @@ typedef enum {
 	BLINK_TWO
 } BlinkState;
 
-uint16_t countDown;
-BlinkState state;
+typedef struct {
+	uint16_t countDown;
+	BlinkState state;
+	uint8_t mask;
+} EyeBlinker;
+
+EyeBlinker blink[NUM_LEDS];
 
 void main(void)
 {
-	countDown = getDelay();
-	state = STARE;
+	uint8_t i;
+	LED_TRIS = 0;   // Pin as output
+	LED_LAT = 0xFF; // All LEDs on
+	
+	for (i = 0; i < NUM_LEDS; ++i) {
+		blink[i].countDown = getDelay();
+		blink[i].state = STARE;
+		blink[i].mask = 1 << i;
+	}
 
-	LED_TRIS = 0; // Pin as output
-	LED_LAT = 0; // LED off
+	i = 0;
 	while (1) {
-		if (state == STARE || state == GLANCE) {
-			LED_LAT = !LED_LAT; // Toggle LED
-		}
-		--countDown;
-		if (countDown == 0) {
-			++state;
-			if (state > BLINK_TWO) {
-				state = STARE;
-				countDown = getDelay();
+		--blink[i].countDown;
+		if (blink[i].countDown == 0) {
+			++blink[i].state;
+			if (blink[i].state > BLINK_TWO) {
+				blink[i].state = STARE;
+				blink[i].countDown = getDelay();
 			} else {
-				countDown = 300;
+				blink[i].countDown = BLINK_DELAY;
 			}
-			LED_LAT = !(state & 0x1);
+			LED_LAT ^= blink[i].mask; // Toggle LED
 		}
+		++i;
+		if (i == NUM_LEDS) i = 0;
 	}
 }
