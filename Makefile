@@ -12,7 +12,7 @@ $(SRC:.c=.hex): $(SRC)
 clean:
 	rm -f $(SRC:.c=.asm) $(SRC:.c=.cod) $(SRC:.c=.hex) $(SRC:.c=.lst) $(SRC:.c=.o)
 
-flash:
+flash: $(SRC:.c=.hex)
 	pk2cmd -ppic$(PROC) -f$(SRC:.c=.hex) -m
 
 .PHONY: all clean
